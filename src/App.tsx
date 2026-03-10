@@ -26,9 +26,21 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [gameOver, setGameOver] = useState(false);
   const [score, setScore] = useState(0);
-  const [highScore, setHighScore] = useState(() => {
-    const saved = localStorage.getItem('snakeHighScore');
-    return saved ? parseInt(saved, 10) : 0;
+  const [highScores, setHighScores] = useState<number[]>(() => {
+    const saved = localStorage.getItem('snakeHighScores');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const scores = parsed.slice(0, 5);
+          while (scores.length < 5) scores.push(0);
+          return scores;
+        }
+      } catch (e) {}
+    }
+    const oldSaved = localStorage.getItem('snakeHighScore');
+    const initial = oldSaved ? parseInt(oldSaved, 10) : 0;
+    return [initial, 0, 0, 0, 0];
   });
   const [isPaused, setIsPaused] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
@@ -59,11 +71,12 @@ export default function App() {
   const handleGameOver = useCallback(() => {
     setGameOver(true);
     setHasStarted(false);
-    if (score > highScore) {
-      setHighScore(score);
-      localStorage.setItem('snakeHighScore', score.toString());
-    }
-  }, [score, highScore]);
+    setHighScores((prev) => {
+      const newScores = [...prev, score].sort((a, b) => b - a).slice(0, 5);
+      localStorage.setItem('snakeHighScores', JSON.stringify(newScores));
+      return newScores;
+    });
+  }, [score]);
 
   const resetGame = useCallback(() => {
     snakeRef.current = [...INITIAL_SNAKE];
@@ -314,7 +327,7 @@ export default function App() {
             <Trophy size={14} />
             <span>HI-SCORE</span>
           </div>
-          <div className="text-sm">{highScore.toString().padStart(4, '0')}</div>
+          <div className="text-sm">{highScores[0].toString().padStart(4, '0')}</div>
         </div>
       </div>
 
@@ -338,7 +351,19 @@ export default function App() {
 
         {/* Overlays */}
         {(!hasStarted && !gameOver) && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 rounded-xl backdrop-blur-sm">
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 rounded-xl backdrop-blur-sm">
+            <div className="mb-8 w-48 bg-slate-900/80 p-4 rounded-lg border border-slate-700 shadow-xl">
+              <div className="text-yellow-400 text-[10px] mb-3 text-center flex items-center justify-center gap-2">
+                <Trophy size={12} /> TOP 5 SCORES <Trophy size={12} />
+              </div>
+              {highScores.map((s, i) => (
+                <div key={i} className={`flex justify-between text-[10px] mb-2 last:mb-0 ${i === 0 ? 'text-yellow-400' : 'text-slate-300'}`}>
+                  <span>#{i + 1}</span>
+                  <span>{s.toString().padStart(4, '0')}</span>
+                </div>
+              ))}
+            </div>
+
             <button 
               onClick={() => setHasStarted(true)}
               className="group flex flex-col items-center gap-4 hover:scale-105 transition-transform cursor-pointer"
@@ -366,7 +391,23 @@ export default function App() {
         {gameOver && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 rounded-xl backdrop-blur-sm">
             <div className="text-2xl text-red-500 mb-2 drop-shadow-[0_0_10px_rgba(239,68,68,0.8)]">GAME OVER</div>
-            <div className="text-xs text-slate-300 mb-8">FINAL SCORE: {score}</div>
+            <div className="text-xs text-slate-300 mb-6">FINAL SCORE: {score}</div>
+            
+            <div className="mb-8 w-48 bg-slate-900/80 p-4 rounded-lg border border-slate-700 shadow-xl">
+              <div className="text-yellow-400 text-[10px] mb-3 text-center flex items-center justify-center gap-2">
+                <Trophy size={12} /> TOP 5 SCORES <Trophy size={12} />
+              </div>
+              {highScores.map((s, i) => {
+                const isCurrentScore = s === score && score > 0;
+                return (
+                  <div key={i} className={`flex justify-between text-[10px] mb-2 last:mb-0 ${isCurrentScore ? 'text-green-400 animate-pulse' : (i === 0 ? 'text-yellow-400' : 'text-slate-300')}`}>
+                    <span>#{i + 1}</span>
+                    <span>{s.toString().padStart(4, '0')}</span>
+                  </div>
+                );
+              })}
+            </div>
+
             <button 
               onClick={resetGame}
               className="group flex items-center gap-3 px-6 py-3 bg-green-500 text-slate-950 rounded hover:bg-green-400 transition-colors shadow-[0_0_15px_rgba(34,197,94,0.3)] cursor-pointer"
