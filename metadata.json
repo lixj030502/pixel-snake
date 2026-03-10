@@ -1,0 +1,5 @@
+{
+  "name": "Pixel Snake",
+  "description": "A retro pixel-style Snake game.",
+  "requestFramePermissions": []
+}
