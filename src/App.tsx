@@ -4,12 +4,12 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Trophy, Play, RotateCcw, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Cloud } from 'lucide-react';
+import { Trophy, Play, RotateCcw, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Cloud, Palette, X } from 'lucide-react';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
 
-const GRID_SIZE = 20;
+const GRID_SIZE = 30;
 const CELL_SIZE = 20;
 const CANVAS_SIZE = GRID_SIZE * CELL_SIZE;
 const INITIAL_SPEED = 250;
@@ -19,11 +19,29 @@ const SPEED_DECREMENT = 2;
 type Point = { x: number; y: number };
 
 const INITIAL_SNAKE: Point[] = [
-  { x: 10, y: 10 },
-  { x: 10, y: 11 },
-  { x: 10, y: 12 },
+  { x: 15, y: 15 },
+  { x: 15, y: 16 },
+  { x: 15, y: 17 },
 ];
 const INITIAL_DIRECTION: Point = { x: 0, y: -1 };
+
+const SNAKE_SKINS = [
+  { id: 'classic', name: 'Classic', head: '#22c55e', body: '#4ade80' },
+  { id: 'ocean', name: 'Ocean', head: '#0ea5e9', body: '#38bdf8' },
+  { id: 'lava', name: 'Lava', head: '#ef4444', body: '#f87171' },
+  { id: 'royal', name: 'Royal', head: '#a855f7', body: '#c084fc' },
+  { id: 'ghost', name: 'Ghost', head: '#f1f5f9', body: '#cbd5e1' },
+  { id: 'gold', name: 'Gold', head: '#eab308', body: '#facc15' },
+];
+
+const FRUIT_TYPES = [
+  { id: 'apple', name: 'Apple', emoji: '🍎' },
+  { id: 'banana', name: 'Banana', emoji: '🍌' },
+  { id: 'grape', name: 'Grape', emoji: '🍇' },
+  { id: 'orange', name: 'Orange', emoji: '🍊' },
+  { id: 'strawberry', name: 'Berry', emoji: '🍓' },
+  { id: 'cherry', name: 'Cherry', emoji: '🍒' },
+];
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -34,6 +52,15 @@ export default function App() {
   const [hasStarted, setHasStarted] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [snakeSkin, setSnakeSkin] = useState(SNAKE_SKINS[0]);
+  const [fruitType, setFruitType] = useState(FRUIT_TYPES[0]);
+
+  const snakeSkinRef = useRef(SNAKE_SKINS[0]);
+  const fruitTypeRef = useRef(FRUIT_TYPES[0]);
+
+  useEffect(() => { snakeSkinRef.current = snakeSkin; }, [snakeSkin]);
+  useEffect(() => { fruitTypeRef.current = fruitType; }, [fruitType]);
 
   // Initialize Firebase Auth
   useEffect(() => {
@@ -170,14 +197,13 @@ export default function App() {
       ctx.stroke();
     }
 
-    // Draw food (apple)
-    ctx.fillStyle = '#ef4444'; // red-500
+    // Draw food
     const fx = foodRef.current.x * CELL_SIZE;
     const fy = foodRef.current.y * CELL_SIZE;
-    ctx.fillRect(fx + 2, fy + 2, CELL_SIZE - 4, CELL_SIZE - 4);
-    // Apple stem
-    ctx.fillStyle = '#22c55e'; // green-500
-    ctx.fillRect(fx + CELL_SIZE / 2 - 2, fy, 4, 4);
+    ctx.font = `${CELL_SIZE - 4}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(fruitTypeRef.current.emoji, fx + CELL_SIZE / 2, fy + CELL_SIZE / 2 + 2);
 
     // Draw snake
     snakeRef.current.forEach((segment, index) => {
@@ -185,7 +211,7 @@ export default function App() {
       const x = segment.x * CELL_SIZE;
       const y = segment.y * CELL_SIZE;
 
-      ctx.fillStyle = isHead ? '#22c55e' : '#4ade80'; // green-500 : green-400
+      ctx.fillStyle = isHead ? snakeSkinRef.current.head : snakeSkinRef.current.body;
       ctx.fillRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2);
 
       // Draw eyes for head
@@ -213,7 +239,7 @@ export default function App() {
   }, []);
 
   const update = useCallback((time: number) => {
-    if (gameOver || isPaused || !hasStarted) {
+    if (gameOver || isPaused || !hasStarted || showSettings) {
       draw();
       requestRef.current = requestAnimationFrame(update);
       return;
@@ -263,7 +289,7 @@ export default function App() {
     
     draw();
     requestRef.current = requestAnimationFrame(update);
-  }, [gameOver, isPaused, hasStarted, draw, handleGameOver, generateFood]);
+  }, [gameOver, isPaused, hasStarted, showSettings, draw, handleGameOver, generateFood]);
 
   useEffect(() => {
     foodRef.current = generateFood(INITIAL_SNAKE);
@@ -372,9 +398,19 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 font-pixel bg-slate-900 text-slate-100 selection:bg-green-500/30">
       
-      <div className="w-full max-w-md mb-6 flex justify-between items-end">
+      <div className="w-full max-w-[600px] mb-6 flex justify-between items-end">
         <div>
-          <h1 className="text-2xl md:text-3xl text-green-400 mb-2 drop-shadow-[0_0_8px_rgba(74,222,128,0.5)]">SNAKE</h1>
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-2xl md:text-3xl text-green-400 drop-shadow-[0_0_8px_rgba(74,222,128,0.5)]">SNAKE</h1>
+            <button 
+              onClick={() => setShowSettings(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-full text-xs transition-colors cursor-pointer border border-slate-700"
+              title="个性化"
+            >
+              <Palette size={14} />
+              <span>个性化</span>
+            </button>
+          </div>
           <div className="text-xs text-slate-400">SCORE: <span className="text-white">{score.toString().padStart(4, '0')}</span></div>
         </div>
         <div className="text-right">
@@ -399,7 +435,7 @@ export default function App() {
           style={{ 
             imageRendering: 'pixelated',
             width: '100%',
-            maxWidth: '400px',
+            maxWidth: '600px',
             aspectRatio: '1/1'
           }}
         />
@@ -470,6 +506,54 @@ export default function App() {
               <RotateCcw size={18} className="group-hover:-rotate-180 transition-transform duration-500" />
               <span className="text-xs font-bold">PLAY AGAIN</span>
             </button>
+          </div>
+        )}
+
+        {showSettings && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 rounded-xl backdrop-blur-md z-50">
+            <div className="w-full max-w-[80%] bg-slate-900 border border-slate-700 rounded-xl p-6 shadow-2xl relative">
+              <button 
+                onClick={() => setShowSettings(false)}
+                className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+              
+              <h2 className="text-xl text-green-400 mb-6 text-center">个性化</h2>
+              
+              <div className="mb-6">
+                <h3 className="text-xs text-slate-400 mb-3 text-center">蛇的皮肤</h3>
+                <div className="flex flex-wrap gap-3 justify-center">
+                  {SNAKE_SKINS.map(skin => (
+                    <button
+                      key={skin.id}
+                      onClick={() => setSnakeSkin(skin)}
+                      className={`w-10 h-10 rounded-lg border-2 flex items-center justify-center cursor-pointer transition-all ${snakeSkin.id === skin.id ? 'border-white scale-110 shadow-[0_0_10px_rgba(255,255,255,0.3)]' : 'border-transparent hover:border-slate-500'}`}
+                      style={{ backgroundColor: skin.body }}
+                      title={skin.name}
+                    >
+                      <div className="w-4 h-4 rounded-sm" style={{ backgroundColor: skin.head }} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-xs text-slate-400 mb-3 text-center">水果种类</h3>
+                <div className="flex flex-wrap gap-3 justify-center">
+                  {FRUIT_TYPES.map(fruit => (
+                    <button
+                      key={fruit.id}
+                      onClick={() => setFruitType(fruit)}
+                      className={`w-10 h-10 rounded-lg border-2 flex items-center justify-center text-xl cursor-pointer transition-all ${fruitType.id === fruit.id ? 'border-white scale-110 bg-slate-800 shadow-[0_0_10px_rgba(255,255,255,0.3)]' : 'border-transparent hover:border-slate-500 bg-slate-800/50'}`}
+                      title={fruit.name}
+                    >
+                      {fruit.emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
