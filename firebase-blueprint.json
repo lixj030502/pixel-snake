@@ -1,0 +1,30 @@
+{
+  "entities": {
+    "UserScores": {
+      "title": "UserScores",
+      "description": "Stores the top 5 high scores for a user.",
+      "type": "object",
+      "properties": {
+        "highScores": {
+          "type": "array",
+          "description": "The user's top 5 high scores in descending order.",
+          "items": {
+            "type": "number"
+          }
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The time when the scores were last updated."
+        }
+      },
+      "required": ["highScores", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/userScores/{userId}": {
+      "schema": "UserScores",
+      "description": "Stores the high scores for each user."
+    }
+  }
+}

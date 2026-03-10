@@ -4,7 +4,10 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Trophy, Play, RotateCcw, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Trophy, Play, RotateCcw, Pause, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Cloud } from 'lucide-react';
+import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db } from './firebase';
 
 const GRID_SIZE = 20;
 const CELL_SIZE = 20;
@@ -26,24 +29,64 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [gameOver, setGameOver] = useState(false);
   const [score, setScore] = useState(0);
-  const [highScores, setHighScores] = useState<number[]>(() => {
-    const saved = localStorage.getItem('snakeHighScores');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const scores = parsed.slice(0, 5);
-          while (scores.length < 5) scores.push(0);
-          return scores;
-        }
-      } catch (e) {}
-    }
-    const oldSaved = localStorage.getItem('snakeHighScore');
-    const initial = oldSaved ? parseInt(oldSaved, 10) : 0;
-    return [initial, 0, 0, 0, 0];
-  });
+  const [highScores, setHighScores] = useState<number[]>([0, 0, 0, 0, 0]);
   const [isPaused, setIsPaused] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+
+  // Initialize Firebase Auth
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setUserId(user.uid);
+        // Fetch scores from cloud
+        try {
+          setIsCloudSyncing(true);
+          const docRef = doc(db, 'userScores', user.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.highScores && Array.isArray(data.highScores)) {
+              const scores = data.highScores.slice(0, 5);
+              while (scores.length < 5) scores.push(0);
+              setHighScores(scores);
+            }
+          } else {
+            // Try to migrate local storage scores to cloud
+            const saved = localStorage.getItem('snakeHighScores');
+            let localScores = [0, 0, 0, 0, 0];
+            if (saved) {
+              try {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  localScores = parsed.slice(0, 5);
+                  while (localScores.length < 5) localScores.push(0);
+                }
+              } catch (e) {}
+            } else {
+              const oldSaved = localStorage.getItem('snakeHighScore');
+              if (oldSaved) localScores[0] = parseInt(oldSaved, 10);
+            }
+            setHighScores(localScores);
+            await setDoc(docRef, {
+              highScores: localScores,
+              updatedAt: serverTimestamp()
+            });
+          }
+        } catch (error) {
+          console.error("Error fetching scores:", error);
+        } finally {
+          setIsCloudSyncing(false);
+        }
+      } else {
+        // Sign in anonymously if not logged in
+        signInAnonymously(auth).catch(console.error);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const snakeRef = useRef<Point[]>([...INITIAL_SNAKE]);
   const directionRef = useRef<Point>({ ...INITIAL_DIRECTION });
@@ -73,10 +116,22 @@ export default function App() {
     setHasStarted(false);
     setHighScores((prev) => {
       const newScores = [...prev, score].sort((a, b) => b - a).slice(0, 5);
+      
+      // Save to local storage as backup
       localStorage.setItem('snakeHighScores', JSON.stringify(newScores));
+      
+      // Save to cloud if authenticated
+      if (userId) {
+        setIsCloudSyncing(true);
+        setDoc(doc(db, 'userScores', userId), {
+          highScores: newScores,
+          updatedAt: serverTimestamp()
+        }).catch(console.error).finally(() => setIsCloudSyncing(false));
+      }
+      
       return newScores;
     });
-  }, [score]);
+  }, [score, userId]);
 
   const resetGame = useCallback(() => {
     snakeRef.current = [...INITIAL_SNAKE];
@@ -324,7 +379,7 @@ export default function App() {
         </div>
         <div className="text-right">
           <div className="flex items-center justify-end gap-2 text-yellow-400 text-xs mb-1">
-            <Trophy size={14} />
+            {isCloudSyncing ? <Cloud size={14} className="animate-pulse text-blue-400" /> : <Trophy size={14} />}
             <span>HI-SCORE</span>
           </div>
           <div className="text-sm">{highScores[0].toString().padStart(4, '0')}</div>

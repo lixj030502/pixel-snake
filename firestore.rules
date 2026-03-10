@@ -1,0 +1,53 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: userScores
+    // Document ID: {userId}
+    // Fields:
+    //   - highScores: list of numbers (required, max size 5) - The user's top 5 high scores
+    //   - updatedAt: timestamp (required) - The time when the scores were last updated
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+    
+    function isValidList(list, maxSize) {
+      return list is list && list.size() <= maxSize;
+    }
+    
+    function isValidUserScores(data) {
+      return hasOnlyAllowedFields(['highScores', 'updatedAt']) &&
+             isValidList(data.highScores, 5) &&
+             data.updatedAt is timestamp;
+    }
+    
+    match /userScores/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUserScores(request.resource.data);
+      allow update: if isOwner(userId) && isValidUserScores(request.resource.data);
+      allow delete: if false;
+    }
+  }
+}
