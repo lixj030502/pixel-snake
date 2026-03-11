@@ -11,3 +11,26 @@ body {
   overscroll-behavior: none;
   touch-action: none;
 }
+
+/* 蛇头上下浮动 */
+@keyframes snake-bob {
+  0%, 100% { transform: translateY(0px); }
+  50%      { transform: translateY(-6px); }
+}
+.snake-head-svg {
+  animation: snake-bob 1.6s ease-in-out infinite;
+}
+
+/* 舌头吐信：快速伸出 → 短暂收回 → 再伸出 → 长时间收起 */
+@keyframes tongue-flick {
+  0%,  30%  { transform: scaleX(0); }
+  35%, 48%  { transform: scaleX(1); }
+  53%, 60%  { transform: scaleX(0); }
+  65%, 78%  { transform: scaleX(1); }
+  83%, 100% { transform: scaleX(0); }
+}
+.snake-tongue {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: tongue-flick 2.8s ease-in-out infinite;
+}
